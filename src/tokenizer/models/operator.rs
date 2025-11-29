@@ -1,14 +1,7 @@
-use bigdecimal::BigDecimal;
+use std::fmt;
 use variantly::Variantly;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Token {
-    Number(BigDecimal),
-    MathConst(String),
-    Op(Operator),
-    LParenthesis,
-    RParenthesis,
-}
+use crate::tokenizer::Assoc;
 
 #[derive(Debug, Clone, PartialEq, Copy, Variantly)]
 pub enum Operator {
@@ -39,22 +32,19 @@ pub fn is_op(ch: char) -> bool {
     matches!(ch, '+' | '-' | '*' | '/' | '%' | '^')
 }
 
-pub fn is_paren(ch: char) -> bool {
-    matches!(ch, '(' | ')')
-}
-
-pub fn to_paren(ch: char) -> Token {
-    match ch {
-        '(' => Token::LParenthesis,
-        ')' => Token::RParenthesis,
-        _ => panic!("Invalid character for parenthesis: {}", ch),
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let symbol = match self {
+            Operator::Add => "+",
+            Operator::Sub => "-",
+            Operator::Mul => "*",
+            Operator::Div => "/",
+            Operator::Mod => "%",
+            Operator::Pow => "^",
+            Operator::UnarySub => "u-",
+        };
+        write!(f, "{symbol}")
     }
-}
-
-#[derive(Debug)]
-pub enum Assoc {
-    Left,
-    Right,
 }
 
 pub fn operator_precedence(op: Operator) -> u8 {
