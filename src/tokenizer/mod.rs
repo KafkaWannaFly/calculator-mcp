@@ -54,7 +54,7 @@ fn tokenize(input: &str) -> anyhow::Result<Vec<Token>> {
                         break;
                     }
                 }
-                tokens.push(Token::Const(ident));
+                tokens.push(Token::MathConst(ident));
             }
             _ => {
                 bail!("Unexpected character: {}", c);
@@ -68,14 +68,27 @@ fn tokenize(input: &str) -> anyhow::Result<Vec<Token>> {
 fn shunting_yard(tokens: &[Token]) -> anyhow::Result<Vec<Token>> {
     let mut output = Vec::new();
     let mut stack: Vec<Token> = Vec::new();
+    let mut expect_operand = true;
 
     for token in tokens {
         match token {
-            Token::Number(_) | Token::Const(_) => output.push(token.clone()),
+            Token::Number(_) | Token::MathConst(_) => {
+                output.push(token.clone());
+                expect_operand = false;
+            }
             Token::Op(op) => {
+                let mut current_op = *op;
+                if expect_operand {
+                    if current_op == Operator::Sub {
+                        current_op = Operator::UnarySub;
+                    } else {
+                        bail!("Unexpected operator placement");
+                    }
+                }
+
                 while let Some(stack_top) = stack.last() {
                     let should_pop = match stack_top {
-                        Token::Op(stack_op) => should_pop_operator(*stack_op, *op),
+                        Token::Op(stack_op) => should_pop_operator(*stack_op, current_op),
                         Token::LParenthesis => false,
                         _ => false,
                     };
@@ -88,9 +101,13 @@ fn shunting_yard(tokens: &[Token]) -> anyhow::Result<Vec<Token>> {
                         break;
                     }
                 }
-                stack.push(token.clone());
+                stack.push(Token::Op(current_op));
+                expect_operand = true;
             }
-            Token::LParenthesis => stack.push(Token::LParenthesis),
+            Token::LParenthesis => {
+                stack.push(Token::LParenthesis);
+                expect_operand = true;
+            }
             Token::RParenthesis => {
                 let mut found_left = false;
                 while let Some(popped) = stack.pop() {
@@ -106,6 +123,7 @@ fn shunting_yard(tokens: &[Token]) -> anyhow::Result<Vec<Token>> {
                 if !found_left {
                     bail!("Mismatched parentheses");
                 }
+                expect_operand = false;
             }
         }
     }
@@ -127,16 +145,24 @@ fn eval_rpn(tokens: &[Token]) -> anyhow::Result<BigDecimal> {
         match token {
             Token::Number(num) => stack.push(num.clone()),
             Token::Op(op) => {
-                let rhs = stack
-                    .pop()
-                    .ok_or_else(|| anyhow!("Not enough operands for operator"))?;
-                let lhs = stack
-                    .pop()
-                    .ok_or_else(|| anyhow!("Not enough operands for operator"))?;
-                let result = apply_operator(lhs, rhs, *op)?;
-                stack.push(result);
+                if op.is_unary_sub() {
+                    let value = stack
+                        .pop()
+                        .ok_or_else(|| anyhow!("Not enough operands for operator"))?;
+                    let result = apply_unary_operator(value, *op)?;
+                    stack.push(result);
+                } else {
+                    let rhs = stack
+                        .pop()
+                        .ok_or_else(|| anyhow!("Not enough operands for operator"))?;
+                    let lhs = stack
+                        .pop()
+                        .ok_or_else(|| anyhow!("Not enough operands for operator"))?;
+                    let result = apply_operator(lhs, rhs, *op)?;
+                    stack.push(result);
+                }
             }
-            Token::Const(ident) => bail!("Unknown identifier in RPN evaluation: {}", ident),
+            Token::MathConst(ident) => bail!("Unknown identifier in RPN evaluation: {}", ident),
             Token::LParenthesis | Token::RParenthesis => {
                 bail!("Parenthesis encountered in RPN stream")
             }
@@ -161,6 +187,12 @@ fn apply_operator(lhs: BigDecimal, rhs: BigDecimal, op: Operator) -> anyhow::Res
             }
             lhs / rhs
         }
+        Operator::Mod => {
+            if rhs.is_zero() {
+                bail!("Modulo by zero");
+            }
+            lhs % rhs
+        }
         Operator::Pow => {
             if !rhs.is_integer() {
                 bail!("Exponent must be an integer for power operation");
@@ -170,9 +202,17 @@ fn apply_operator(lhs: BigDecimal, rhs: BigDecimal, op: Operator) -> anyhow::Res
                 .ok_or_else(|| anyhow!("Exponent is out of range for power operation"))?;
             lhs.powi(exponent)
         }
+        Operator::UnarySub => bail!("Unary operator cannot be applied in binary context"),
     };
 
     Ok(result)
+}
+
+fn apply_unary_operator(value: BigDecimal, op: Operator) -> anyhow::Result<BigDecimal> {
+    match op {
+        Operator::UnarySub => Ok(-value),
+        _ => bail!("Unsupported unary operator"),
+    }
 }
 
 pub fn eval(input: &str) -> anyhow::Result<BigDecimal> {
@@ -194,6 +234,12 @@ mod tests {
         assert_eq!(eval("3 / 4").unwrap(), BigDecimal::from_f64(0.75).unwrap());
         assert_eq!(eval("3 ^ 4").unwrap(), BigDecimal::from(81));
 
+        assert_eq!(eval("-5 * 4").unwrap(), BigDecimal::from(-20));
+        assert_eq!(eval("-5 + (-5)").unwrap(), BigDecimal::from(-10));
+        assert_eq!(eval("-(-3 * 2)").unwrap(), BigDecimal::from(6));
+        assert_eq!(eval("--5").unwrap(), BigDecimal::from(5));
+        assert_eq!(eval("-5 * -2").unwrap(), BigDecimal::from(10));
+
         assert_eq!(eval("3 + 4 * 5").unwrap(), BigDecimal::from(23));
         assert_eq!(eval("(3 + 4) * 5").unwrap(), BigDecimal::from(35));
         assert_eq!(eval("3 + 4 * 5 / 2").unwrap(), BigDecimal::from(13));
@@ -206,11 +252,17 @@ mod tests {
         assert_eq!(eval("2^(3 + 1)").unwrap(), BigDecimal::from(16));
         assert_eq!(eval("1/2 * 10 * 2^2 + 1").unwrap(), BigDecimal::from(21));
 
+        assert_eq!(eval("10 % 3").unwrap(), BigDecimal::from(1));
+        assert_eq!(eval("10 % 3 * 2").unwrap(), BigDecimal::from(2));
         assert_eq!(
             eval("2.5 * 5.2 / 3.1").unwrap().round(2).to_plain_string(),
             "4.19"
         );
         assert_eq!(eval("2.5 ^ 2").unwrap().round(2).to_string(), "6.25");
-        assert_eq!(eval("2.5 ^ (2 + 2)").unwrap().round(4).to_string(), "39.0625");
+        assert_eq!(eval("(-2.5) ^ 2").unwrap().round(2).to_string(), "6.25");
+        assert_eq!(
+            eval("2.5 ^ (2 + 2)").unwrap().round(4).to_string(),
+            "39.0625"
+        );
     }
 }

@@ -1,21 +1,24 @@
 use bigdecimal::BigDecimal;
+use variantly::Variantly;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Number(BigDecimal),
-    Const(String),
+    MathConst(String),
     Op(Operator),
     LParenthesis,
     RParenthesis,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Variantly)]
 pub enum Operator {
     Add,
     Sub,
     Mul,
     Div,
+    Mod,
     Pow,
+    UnarySub,
 }
 
 impl From<char> for Operator {
@@ -25,6 +28,7 @@ impl From<char> for Operator {
             '-' => Operator::Sub,
             '*' => Operator::Mul,
             '/' => Operator::Div,
+            '%' => Operator::Mod,
             '^' => Operator::Pow,
             _ => panic!("Invalid character for operator: {}", c),
         }
@@ -32,7 +36,7 @@ impl From<char> for Operator {
 }
 
 pub fn is_op(ch: char) -> bool {
-    matches!(ch, '+' | '-' | '*' | '/' | '^')
+    matches!(ch, '+' | '-' | '*' | '/' | '%' | '^')
 }
 
 pub fn is_paren(ch: char) -> bool {
@@ -56,15 +60,18 @@ pub enum Assoc {
 pub fn operator_precedence(op: Operator) -> u8 {
     match op {
         Operator::Add | Operator::Sub => 1,
-        Operator::Mul | Operator::Div => 2,
-        Operator::Pow => 3,
+        Operator::Mul | Operator::Div | Operator::Mod => 2,
+        Operator::UnarySub => 3,
+        Operator::Pow => 4,
     }
 }
 
 pub fn operator_associativity(op: Operator) -> Assoc {
     match op {
-        Operator::Pow => Assoc::Right,
-        Operator::Add | Operator::Sub | Operator::Mul | Operator::Div => Assoc::Left,
+        Operator::Pow | Operator::UnarySub => Assoc::Right,
+        Operator::Add | Operator::Sub | Operator::Mul | Operator::Div | Operator::Mod => {
+            Assoc::Left
+        }
     }
 }
 

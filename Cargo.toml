@@ -7,3 +7,4 @@ edition = "2024"
 anyhow = "1.0.100"
 bigdecimal = { version = "0.4.9", features = ["serde-json"] }
 num-traits = "0.2"
+variantly = "0.4.0"
