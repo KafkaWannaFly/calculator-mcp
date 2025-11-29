@@ -1,8 +1,8 @@
 pub mod models;
 use anyhow::{anyhow, bail};
 use bigdecimal::BigDecimal;
-use num_traits::{ToPrimitive, Zero};
 pub use models::*;
+use num_traits::{ToPrimitive, Zero};
 
 fn tokenize(input: &str) -> anyhow::Result<Vec<Token>> {
     let mut tokens = Vec::new();
@@ -178,5 +178,39 @@ fn apply_operator(lhs: BigDecimal, rhs: BigDecimal, op: Operator) -> anyhow::Res
 pub fn eval(input: &str) -> anyhow::Result<BigDecimal> {
     let tokens = tokenize(input)?;
     let rpn = shunting_yard(&tokens)?;
-    eval_rpn(&rpn)
+    eval_rpn(&rpn).map(|result| result.round(8))
+}
+
+#[cfg(test)]
+mod tests {
+    use num_traits::FromPrimitive;
+
+    use super::*;
+
+    #[test]
+    fn test_eval() {
+        assert_eq!(eval("3 + 4").unwrap(), BigDecimal::from(7));
+        assert_eq!(eval("3 * 4").unwrap(), BigDecimal::from(12));
+        assert_eq!(eval("3 / 4").unwrap(), BigDecimal::from_f64(0.75).unwrap());
+        assert_eq!(eval("3 ^ 4").unwrap(), BigDecimal::from(81));
+
+        assert_eq!(eval("3 + 4 * 5").unwrap(), BigDecimal::from(23));
+        assert_eq!(eval("(3 + 4) * 5").unwrap(), BigDecimal::from(35));
+        assert_eq!(eval("3 + 4 * 5 / 2").unwrap(), BigDecimal::from(13));
+        assert_eq!(
+            eval("(3 + 4) * 5 / 2").unwrap(),
+            BigDecimal::from_f64(17.5).unwrap()
+        );
+
+        assert_eq!(eval("2^3 + 1").unwrap(), BigDecimal::from(9));
+        assert_eq!(eval("2^(3 + 1)").unwrap(), BigDecimal::from(16));
+        assert_eq!(eval("1/2 * 10 * 2^2 + 1").unwrap(), BigDecimal::from(21));
+
+        assert_eq!(
+            eval("2.5 * 5.2 / 3.1").unwrap().round(2).to_plain_string(),
+            "4.19"
+        );
+        assert_eq!(eval("2.5 ^ 2").unwrap().round(2).to_string(), "6.25");
+        assert_eq!(eval("2.5 ^ (2 + 2)").unwrap().round(4).to_string(), "39.0625");
+    }
 }
