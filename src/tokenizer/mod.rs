@@ -3,6 +3,7 @@ use anyhow::{anyhow, bail};
 use bigdecimal::BigDecimal;
 pub use models::*;
 use num_traits::{ToPrimitive, Zero};
+use std::convert::TryFrom;
 
 fn tokenize(input: &str) -> anyhow::Result<Vec<Token>> {
     let mut tokens = Vec::new();
@@ -54,7 +55,8 @@ fn tokenize(input: &str) -> anyhow::Result<Vec<Token>> {
                         break;
                     }
                 }
-                tokens.push(Token::MathConst(ident));
+                let math_const = MathConst::try_from(ident.as_str())?;
+                tokens.push(Token::Ident(math_const));
             }
             _ => {
                 bail!("Unexpected character: {}", c);
@@ -72,7 +74,7 @@ fn shunting_yard(tokens: &[Token]) -> anyhow::Result<Vec<Token>> {
 
     for token in tokens {
         match token {
-            Token::Number(_) | Token::MathConst(_) => {
+            Token::Number(_) | Token::Ident(_) => {
                 output.push(token.clone());
                 expect_operand = false;
             }
@@ -162,7 +164,7 @@ fn eval_rpn(tokens: &[Token]) -> anyhow::Result<BigDecimal> {
                     stack.push(result);
                 }
             }
-            Token::MathConst(ident) => bail!("Unknown identifier in RPN evaluation: {}", ident),
+            Token::Ident(math_const) => stack.push(BigDecimal::from(*math_const)),
             Token::LParenthesis | Token::RParenthesis => {
                 bail!("Parenthesis encountered in RPN stream")
             }
@@ -218,7 +220,7 @@ fn apply_unary_operator(value: BigDecimal, op: Operator) -> anyhow::Result<BigDe
 pub fn eval(input: &str) -> anyhow::Result<BigDecimal> {
     let tokens = tokenize(input)?;
     let rpn = shunting_yard(&tokens)?;
-    eval_rpn(&rpn).map(|result| result.round(8))
+    eval_rpn(&rpn)
 }
 
 #[cfg(test)]
@@ -228,10 +230,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_eval() {
+    fn test_eval_int() {
         assert_eq!(eval("3 + 4").unwrap(), BigDecimal::from(7));
         assert_eq!(eval("3 * 4").unwrap(), BigDecimal::from(12));
-        assert_eq!(eval("3 / 4").unwrap(), BigDecimal::from_f64(0.75).unwrap());
         assert_eq!(eval("3 ^ 4").unwrap(), BigDecimal::from(81));
 
         assert_eq!(eval("-5 * 4").unwrap(), BigDecimal::from(-20));
@@ -243,17 +244,17 @@ mod tests {
         assert_eq!(eval("3 + 4 * 5").unwrap(), BigDecimal::from(23));
         assert_eq!(eval("(3 + 4) * 5").unwrap(), BigDecimal::from(35));
         assert_eq!(eval("3 + 4 * 5 / 2").unwrap(), BigDecimal::from(13));
-        assert_eq!(
-            eval("(3 + 4) * 5 / 2").unwrap(),
-            BigDecimal::from_f64(17.5).unwrap()
-        );
-
         assert_eq!(eval("2^3 + 1").unwrap(), BigDecimal::from(9));
         assert_eq!(eval("2^(3 + 1)").unwrap(), BigDecimal::from(16));
         assert_eq!(eval("1/2 * 10 * 2^2 + 1").unwrap(), BigDecimal::from(21));
 
         assert_eq!(eval("10 % 3").unwrap(), BigDecimal::from(1));
         assert_eq!(eval("10 % 3 * 2").unwrap(), BigDecimal::from(2));
+    }
+
+    #[test]
+    fn test_eval_float() {
+        assert_eq!(eval("3 / 4").unwrap(), BigDecimal::from_f64(0.75).unwrap());
         assert_eq!(
             eval("2.5 * 5.2 / 3.1").unwrap().round(2).to_plain_string(),
             "4.19"
@@ -264,5 +265,29 @@ mod tests {
             eval("2.5 ^ (2 + 2)").unwrap().round(4).to_string(),
             "39.0625"
         );
+        assert_eq!(
+            eval("(3 + 4) * 5 / 2").unwrap(),
+            BigDecimal::from_f64(17.5).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_eval_math_const() {
+        assert_eq!(eval("pi").unwrap(), BigDecimal::from(MathConst::Pi));
+        assert_eq!(
+            eval("pi * 2").unwrap(),
+            BigDecimal::from(MathConst::Pi) * BigDecimal::from(2)
+        );
+        assert_eq!(eval("tau").unwrap(), BigDecimal::from(MathConst::Tau));
+        assert_eq!(eval("e").unwrap(), BigDecimal::from(MathConst::E));
+        assert_eq!(eval("phi").unwrap(), BigDecimal::from(MathConst::Phi));
+        assert_eq!(eval("c").unwrap(), BigDecimal::from(MathConst::C));
+        assert_eq!(eval("h").unwrap(), BigDecimal::from(MathConst::H));
+        assert_eq!(eval("g").unwrap(), BigDecimal::from(MathConst::G));
+        assert_eq!(eval("r").unwrap(), BigDecimal::from(MathConst::R));
+        assert_eq!(eval("na").unwrap(), BigDecimal::from(MathConst::Na));
+        assert_eq!(eval("kb").unwrap(), BigDecimal::from(MathConst::Kb));
+        assert_eq!(eval("ec").unwrap(), BigDecimal::from(MathConst::Ec));
+        assert_eq!(eval("tau / pi").unwrap(), BigDecimal::from(2));
     }
 }
