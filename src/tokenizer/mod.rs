@@ -226,6 +226,7 @@ pub fn eval(input: &str) -> anyhow::Result<BigDecimal> {
 #[cfg(test)]
 mod tests {
     use num_traits::FromPrimitive;
+    use std::str::FromStr;
 
     use super::*;
 
@@ -268,6 +269,15 @@ mod tests {
         assert_eq!(
             eval("(3 + 4) * 5 / 2").unwrap(),
             BigDecimal::from_f64(17.5).unwrap()
+        );
+        assert_eq!(eval("1.2e3").unwrap(), BigDecimal::from(1200));
+        assert_eq!(
+            eval("4.2e-2").unwrap(),
+            BigDecimal::from_str("0.042").unwrap()
+        );
+        assert_eq!(
+            eval("1.5e2 + 2.5e-1").unwrap(),
+            BigDecimal::from_str("150.25").unwrap()
         );
     }
 
