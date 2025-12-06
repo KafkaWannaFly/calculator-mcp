@@ -1,7 +1,7 @@
 use std::fmt;
 use variantly::Variantly;
 
-use crate::tokenizer::Assoc;
+use crate::evaluator::Assoc;
 
 #[derive(Debug, Clone, PartialEq, Copy, Variantly)]
 pub enum Operator {
