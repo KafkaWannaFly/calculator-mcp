@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tracing_subscriber::{fmt::time::UtcTime, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::time::UtcTime};
 
 use crate::{app_config::AppConfig, http_server::HttpServer};
 

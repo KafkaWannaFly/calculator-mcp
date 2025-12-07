@@ -11,11 +11,13 @@ use tower::ServiceBuilder;
 use tower::buffer::BufferLayer;
 use tower::limit::RateLimitLayer;
 use tower::timeout::TimeoutLayer;
+use tower_http::ServiceBuilderExt;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::trace::TraceLayer;
-use tracing::info;
+use tower_http::request_id::MakeRequestUuid;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::{Level, info};
 
 pub struct HttpServer {
     config: Arc<AppConfig>,
@@ -29,6 +31,18 @@ impl HttpServer {
     pub async fn start(&self) -> anyhow::Result<()> {
         let app = Router::new().route("/health", get(health_check)).layer(
             ServiceBuilder::new()
+                .set_x_request_id(MakeRequestUuid)
+                .layer(
+                    TraceLayer::new_for_http()
+                        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                        .on_request(())
+                        .on_response(
+                            DefaultOnResponse::new()
+                                .level(Level::INFO)
+                                .include_headers(true),
+                        ),
+                )
+                .propagate_x_request_id()
                 .layer(HandleErrorLayer::new(|err: BoxError| async move {
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -40,7 +54,6 @@ impl HttpServer {
                 .layer(RateLimitLayer::new(100, Duration::from_secs(1)))
                 .layer(RequestBodyLimitLayer::new(4 * 1024 * 1024))
                 .layer(CatchPanicLayer::new())
-                .layer(TraceLayer::new_for_http())
                 .layer(CorsLayer::permissive()),
         );
 
