@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use bigdecimal::BigDecimal;
 use std::convert::TryFrom;
 use std::fmt;
@@ -46,10 +46,18 @@ impl fmt::Display for MathConst {
 impl From<MathConst> for BigDecimal {
     fn from(value: MathConst) -> Self {
         match value {
-            MathConst::Pi => BigDecimal::from_str("3.1415926535897932384626433832795028841971").unwrap(),
-            MathConst::Tau => BigDecimal::from_str("6.2831853071795864769252867665590057683942").unwrap(),
-            MathConst::E => BigDecimal::from_str("2.7182818284590452353602874713526624977572").unwrap(),
-            MathConst::Phi => BigDecimal::from_str("1.6180339887498948482045868343656381177203").unwrap(),
+            MathConst::Pi => {
+                BigDecimal::from_str("3.1415926535897932384626433832795028841971").unwrap()
+            }
+            MathConst::Tau => {
+                BigDecimal::from_str("6.2831853071795864769252867665590057683942").unwrap()
+            }
+            MathConst::E => {
+                BigDecimal::from_str("2.7182818284590452353602874713526624977572").unwrap()
+            }
+            MathConst::Phi => {
+                BigDecimal::from_str("1.6180339887498948482045868343656381177203").unwrap()
+            }
             MathConst::C => BigDecimal::from_str("299792458").unwrap(),
             MathConst::H => BigDecimal::from_str("6.62607015e-34").unwrap(),
             MathConst::G => BigDecimal::from_str("6.67430e-11").unwrap(),

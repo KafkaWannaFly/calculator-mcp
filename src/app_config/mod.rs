@@ -4,11 +4,11 @@ use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub server: Server,
+    pub http_server: HttpServer,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Server {
+pub struct HttpServer {
     pub port: u16,
 }
 
@@ -20,7 +20,7 @@ impl AppConfig {
             .add_source(File::from(Path::new(file_path)))
             .add_source(
                 Environment::with_prefix("APP")
-                    .separator("_")
+                    .separator("__")
                     .try_parsing(true),
             )
             .build()?;
@@ -62,24 +62,24 @@ mod tests {
         let config = AppConfig::new_from_file("config.toml")
             .expect("Failed to load config from config.toml");
 
-        assert_eq!(config.server.port, 8080);
+        assert_eq!(config.http_server.port, 8080);
     }
 
     #[test]
     #[serial_test::serial]
     fn test_env_var_overrides_file() {
-        let _guard = EnvGuard::new("APP_SERVER_PORT", "9090");
+        let _guard = EnvGuard::new("APP__HTTP_SERVER__PORT", "9090");
 
         let config = AppConfig::new_from_file("config.toml")
             .expect("Failed to load config from config.toml");
 
-        assert_eq!(config.server.port, 9090);
+        assert_eq!(config.http_server.port, 9090);
     }
 
     #[test]
     #[serial_test::serial]
     fn test_env_var_with_invalid_port() {
-        let _guard = EnvGuard::new("APP_SERVER_PORT", "invalid");
+        let _guard = EnvGuard::new("APP__HTTP_SERVER__PORT", "invalid");
 
         let result = AppConfig::new_from_file("config.toml");
 
@@ -90,15 +90,15 @@ mod tests {
     #[serial_test::serial]
     fn test_env_var_multiple_calls() {
         unsafe {
-            std::env::remove_var("APP_SERVER_PORT");
+            std::env::remove_var("APP__HTTP_SERVER__PORT");
         }
         let config1 = AppConfig::new_from_file("config.toml")
             .expect("Failed to load config from config.toml");
-        assert_eq!(config1.server.port, 8080);
+        assert_eq!(config1.http_server.port, 8080);
 
-        let _guard = EnvGuard::new("APP_SERVER_PORT", "5000");
+        let _guard = EnvGuard::new("APP__HTTP_SERVER__PORT", "5000");
         let config2 = AppConfig::new_from_file("config.toml")
             .expect("Failed to load config from config.toml");
-        assert_eq!(config2.server.port, 5000);
+        assert_eq!(config2.http_server.port, 5000);
     }
 }
